@@ -1,0 +1,3 @@
+export async function getInstagramAccount(accessToken: string) { return fetch(`https://graph.facebook.com/v23.0/me?fields=id,username,name&access_token=${encodeURIComponent(accessToken)}`); }
+export async function getConversations(accessToken: string, accountId: string) { return fetch(`https://graph.facebook.com/v23.0/${accountId}/conversations?platform=instagram&access_token=${encodeURIComponent(accessToken)}`); }
+export async function sendSupportedReply(accessToken: string, recipientId: string, message: string) { return fetch(`https://graph.facebook.com/v23.0/me/messages?access_token=${encodeURIComponent(accessToken)}`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ recipient:{id:recipientId}, message:{text:message} }) }); }
