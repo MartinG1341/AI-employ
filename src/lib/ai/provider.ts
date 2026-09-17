@@ -20,6 +20,22 @@ function providerError(body: ChatResponse | null): string {
   if (error && typeof error === "object") return [error.message, error.type, error.code].filter(Boolean).join(" | ");
   return "request failed";
 }
+const defaultOpenAIModel = "gpt-4o-mini";
+async function requestChat(baseUrl: string, model: string, apiKey: string, prompt: string, tone?: string, extraHeaders: Record<string, string> = {}) {
+  const headers: Record<string, string> = { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, ...extraHeaders };
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers, body: JSON.stringify({ model, temperature: 0.7, max_tokens: 220, messages: [{ role: "system", content: "You write concise Instagram outreach messages. Return only the final user-visible text." }, { role: "user", content: `${prompt}\nTone: ${tone || "casual"}` }] }), cache: "no-store" });
+  const body = await response.json().catch(() => null) as ChatResponse | null;
+  if (!response.ok) throw new Error(`AI provider ${response.status}: ${providerError(body)}`);
+  const text = finalText(body);
+  if (!text) throw new Error("AI model returned no final text. Try another model.");
+  return text.replace(/^['"]|['"]$/g, "").trim();
+}
+function openAIConfig() {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) throw new Error("AI_PROVIDER=openai requires OPENAI_API_KEY.");
+  return { apiKey, model: process.env.OPENAI_MODEL?.trim() || defaultOpenAIModel };
+}
+export const openAIProvider: AIProvider = { async generateText({ prompt, tone }) { const { apiKey, model } = openAIConfig(); return requestChat("https://api.openai.com/v1", model, apiKey, prompt, tone); } };
 function compatibleConfig() {
   const baseUrl = process.env.AI_BASE_URL?.trim();
   const model = process.env.AI_MODEL?.trim();
@@ -39,4 +55,11 @@ export const openAICompatibleProvider: AIProvider = { async generateText({ promp
   if (!text) throw new Error("AI model returned no final text. Try another model.");
   return text.replace(/^['"]|['"]$/g, "").trim();
 } };
-export function getAIProvider(): AIProvider { return (process.env.AI_PROVIDER || "mock").trim().toLowerCase() === "openai-compatible" ? openAICompatibleProvider : mockProvider; }
+export function getAIProvider(): AIProvider {
+  const configured = (process.env.AI_PROVIDER || "").trim().toLowerCase();
+  if (configured === "openai") return openAIProvider;
+  if (configured === "openai-compatible") return openAICompatibleProvider;
+  if (!configured && process.env.OPENAI_API_KEY) return openAIProvider;
+  return mockProvider;
+}
+export function getAIProviderName(): "OpenAI" | "OpenAI-compatible" | "Mock" { const configured = (process.env.AI_PROVIDER || "").trim().toLowerCase(); if (configured === "openai" || (!configured && process.env.OPENAI_API_KEY)) return "OpenAI"; if (configured === "openai-compatible") return "OpenAI-compatible"; return "Mock"; }
