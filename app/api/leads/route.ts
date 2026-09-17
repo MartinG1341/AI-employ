@@ -1,0 +1,5 @@
+import { NextResponse } from "next/server"; import { createLead,getLeads } from "@/src/lib/leads/service";
+export async function GET(){try{return NextResponse.json(await getLeads())}catch(error){return NextResponse.json({error:error instanceof Error?error.message:"Unable to load leads"},{status:500})}}
+export async function POST(request:Request){try{const body=await request.json() as Record<string,unknown>;const username=String(body.instagram_username??"").replace(/^@/,"").replace(/https?:\/\/(www\.)?instagram\.com\//,"").replace(/\/$/,"").trim();if(!username)return NextResponse.json({error:"Instagram username is required"},{status:400});return NextResponse.json(await createLead({...body,instagram_username:username,instagram_url:`https://instagram.com/${username}/`,status:"New"}))}catch(error){const message=error instanceof Error?error.message:"Unable to create lead";return NextResponse.json({error:message.includes("duplicate")||message.includes("unique")?"A lead with this Instagram username already exists.":message},{status:400})}}
+
+

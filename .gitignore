@@ -44,3 +44,6 @@ next-env.d.ts
 /.codex/
 /outputs/
 /work/
+/_stage_publish/
+*.tar.gz
+*.tsbuildinfo

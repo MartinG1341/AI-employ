@@ -1,0 +1,3 @@
+import { NextResponse } from "next/server"; import { getLead,updateLead } from "@/src/lib/leads/service";
+export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){try{const lead=await getLead((await params).id);return lead?NextResponse.json(lead):NextResponse.json({error:"Lead not found"},{status:404})}catch(error){return NextResponse.json({error:error instanceof Error?error.message:"Unable to load lead"},{status:500})}}
+export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){try{return NextResponse.json(await updateLead((await params).id,await request.json()))}catch(error){return NextResponse.json({error:error instanceof Error?error.message:"Unable to update lead"},{status:400})}}
