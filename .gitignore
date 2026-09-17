@@ -48,3 +48,6 @@ next-env.d.ts
 /_stage_publish_2/
 *.tar.gz
 *.tsbuildinfo
+
+.vercel
+.env*
