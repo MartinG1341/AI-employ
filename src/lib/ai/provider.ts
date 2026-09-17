@@ -11,7 +11,10 @@ function compatibleConfig() {
 }
 export const openAICompatibleProvider: AIProvider = { async generateText({ prompt, tone }) {
   const { baseUrl, model, apiKey } = compatibleConfig();
-  const response = await fetch(baseUrl, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model, temperature: 0.7, max_tokens: 220, messages: [{ role: "system", content: "You write concise Instagram outreach messages. Return only the final message." }, { role: "user", content: `${prompt}\nTone: ${tone || "casual"}` }] }), cache: "no-store" });
+  const headers: Record<string, string> = { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` };
+  if (process.env.AI_SITE_URL) headers["HTTP-Referer"] = process.env.AI_SITE_URL;
+  if (process.env.AI_APP_NAME) headers["X-Title"] = process.env.AI_APP_NAME;
+  const response = await fetch(baseUrl, { method: "POST", headers, body: JSON.stringify({ model, temperature: 0.7, max_tokens: 220, messages: [{ role: "system", content: "You write concise Instagram outreach messages. Return only the final message." }, { role: "user", content: `${prompt}\nTone: ${tone || "casual"}` }] }), cache: "no-store" });
   const body = await response.json().catch(() => null) as ChatResponse | { error?: { message?: string } } | null;
   if (!response.ok) throw new Error(`AI provider ${response.status}: ${body && "error" in body ? body.error?.message || "request failed" : "request failed"}`);
   const text = body && "choices" in body ? body.choices?.[0]?.message?.content?.trim() : "";
