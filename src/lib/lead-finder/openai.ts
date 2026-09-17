@@ -11,9 +11,9 @@ function extractFinalText(body: ResponsesBody): string {
     if (!value || typeof value !== "object") return;
     if (Array.isArray(value)) return value.forEach(visit);
     const item = value as Record<string, unknown>;
-    if (item.type === "message" && item.role === "assistant") visit(item.content);
+    if (item.type === "message") visit(item.content);
     else if (item.type === "output_text" || item.type === "text") { if (typeof item.text === "string") parts.push(item.text); }
-    else if (!item.type && Array.isArray(item.content)) visit(item.content);
+    else if (Array.isArray(item.content)) visit(item.content);
   };
   visit(body.output); return parts.join("\n").trim();
 }
