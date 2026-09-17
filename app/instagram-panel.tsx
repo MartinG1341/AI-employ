@@ -14,7 +14,7 @@ export default function InstagramPanel() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [reply, setReply] = useState("");
-  const callbackError = typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("instagram_error") || "";
+  const [callbackError, setCallbackError] = useState("");
 
   async function load() {
     const auth = await fetch("/api/instagram/auth").then(r => r.json()) as { authenticated?: boolean; error?: string };
@@ -25,7 +25,7 @@ export default function InstagramPanel() {
     if (!response.ok) throw new Error(data.error || "Unable to load Instagram connection.");
     setConnection(data);
   }
-  useEffect(() => { load().catch(e => setError(e.message)); }, []);
+  useEffect(() => { setCallbackError(new URLSearchParams(window.location.search).get("instagram_error") || ""); load().catch(e => setError(e.message)); }, []);
 
   async function unlock() {
     setBusy(true); setError("");
