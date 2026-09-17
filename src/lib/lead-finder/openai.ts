@@ -2,20 +2,31 @@ import type { Candidate } from "@/src/lib/lead-finder/service";
 
 type RawCandidate = { businessName?: string; platform?: string; username?: string; profileUrl?: string; website?: string; location?: string; category?: string; shortDescription?: string; whyRelevant?: string; publicContactMethod?: string; sourceUrls?: unknown; confidence?: unknown };
 type FinderResult = { assistantMessage: string; candidates: RawCandidate[] };
-type ResponsesBody = { output_text?: string; output?: unknown[]; error?: { message?: string } | string };
+type ResponsesBody = { output_text?: string; output?: unknown[]; status?: string; incomplete_details?: { reason?: string }; error?: { message?: string } | string };
 const schema = { type: "object", additionalProperties: false, required: ["assistantMessage", "candidates"], properties: { assistantMessage: { type: "string" }, candidates: { type: "array", items: { type: "object", additionalProperties: false, required: ["businessName", "platform", "username", "profileUrl", "website", "location", "category", "shortDescription", "whyRelevant", "publicContactMethod", "sourceUrls", "confidence"], properties: { businessName: { type: "string" }, platform: { type: "string" }, username: { type: "string" }, profileUrl: { type: "string" }, website: { type: "string" }, location: { type: "string" }, category: { type: "string" }, shortDescription: { type: "string" }, whyRelevant: { type: "string" }, publicContactMethod: { type: "string" }, sourceUrls: { type: "array", items: { type: "string" } }, confidence: { type: "number" } } } } } };
 function extractFinalText(body: ResponsesBody): string {
   if (typeof body.output_text === "string" && body.output_text.trim()) return body.output_text.trim();
-  const parts: string[] = [];
-  const visit = (value: unknown) => {
+  const messages: string[][] = [];
+  const visit = (value: unknown, messageParts?: string[]) => {
     if (!value || typeof value !== "object") return;
-    if (Array.isArray(value)) return value.forEach(visit);
+    if (Array.isArray(value)) return value.forEach(item => visit(item, messageParts));
     const item = value as Record<string, unknown>;
-    if (item.type === "message") visit(item.content);
-    else if (item.type === "output_text" || item.type === "text") { if (typeof item.text === "string") parts.push(item.text); }
-    else if (Array.isArray(item.content)) visit(item.content);
+    const type = typeof item.type === "string" ? item.type : "";
+    if (type === "reasoning" || type.includes("tool") || type.includes("call")) return;
+    if (type === "message") {
+      const parts: string[] = [];
+      visit(item.content, parts);
+      if (parts.length) messages.push(parts);
+      return;
+    }
+    if (type === "output_text" || type === "text") {
+      if (typeof item.text === "string" && messageParts) messageParts.push(item.text);
+      return;
+    }
+    if (Array.isArray(item.content)) visit(item.content, messageParts);
   };
-  visit(body.output); return parts.join("\n").trim();
+  visit(body.output);
+  return messages.length ? messages[messages.length - 1].join("\n").trim() : "";
 }
 function validUrl(value: unknown): value is string { return typeof value === "string" && /^https?:\/\/[^\s]+$/i.test(value); }
 function validCandidates(value: unknown): Array<Omit<Candidate, "id">> {
@@ -24,10 +35,22 @@ function validCandidates(value: unknown): Array<Omit<Candidate, "id">> {
 }
 export async function searchWeb(query: string, history: Array<{ role: "user" | "assistant"; content: string }>): Promise<{ answer: string; candidates: Array<Omit<Candidate, "id">> }> {
   const key = process.env.OPENAI_API_KEY?.trim(); if (!key) throw new Error("Lead Finder requires OPENAI_API_KEY.");
-  const input = [{ role: "system", content: [{ type: "input_text", text: "You are Sales Copilot Lead Finder. Use public web search only. Return exactly the requested JSON schema. Every candidate must have at least one real public source URL. Never invent usernames, profiles, facts, counts, revenue, or contact volume. Use empty strings for unverified fields. Keep the assistantMessage concise." }] }, ...history.slice(-10).map(message => ({ role: message.role, content: [{ type: "input_text", text: message.content }] })), { role: "user", content: [{ type: "input_text", text: query }] }];
-  const response = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_LEAD_FINDER_MODEL?.trim() || "gpt-5-mini", tools: [{ type: "web_search" }], input, max_output_tokens: 3000, text: { format: { type: "json_schema", name: "lead_finder_results", strict: true, schema } } }), cache: "no-store" });
-  const body = await response.json().catch(() => null) as ResponsesBody | null; if (!response.ok) { const error = body?.error; throw new Error(`Lead Finder provider ${response.status}: ${typeof error === "string" ? error : error?.message || "request failed"}`); }
-  const raw = extractFinalText(body || {}); if (!raw) throw new Error("Lead Finder returned no final structured text. Try a narrower search.");
+  const systemText = "You are Sales Copilot Lead Finder. Use public web search only. Return exactly the requested JSON schema. Every candidate must have at least one real public source URL. Never invent usernames, profiles, facts, counts, revenue, or contact volume. Use empty strings for unverified fields. Keep the assistantMessage concise.";
+  const baseInput = [{ role: "system", content: [{ type: "input_text", text: systemText }] }, ...history.slice(-10).map(message => ({ role: message.role, content: [{ type: "input_text", text: message.content }] })), { role: "user", content: [{ type: "input_text", text: query }] }];
+  const request = async (retry: boolean) => {
+    const input = retry ? [...baseInput, { role: "user", content: [{ type: "input_text", text: "The public web search is complete. Return the final structured JSON object now. Do not return tool calls, reasoning, or prose outside the JSON object." }] }] : baseInput;
+    const response = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_LEAD_FINDER_MODEL?.trim() || "gpt-5-mini", tools: [{ type: "web_search" }], input, max_output_tokens: 3000, text: { format: { type: "json_schema", name: "lead_finder_results", strict: true, schema } } }), cache: "no-store" });
+    const body = await response.json().catch(() => null) as ResponsesBody | null;
+    if (!response.ok) { const error = body?.error; throw new Error(`Lead Finder provider request failed (${response.status}): ${typeof error === "string" ? error : error?.message || "request failed"}`); }
+    return body || {};
+  };
+  let body = await request(false);
+  let raw = extractFinalText(body);
+  if (!raw) { body = await request(true); raw = extractFinalText(body); }
+  if (!raw) {
+    if (body.status === "incomplete") throw new Error(`Lead Finder response incomplete: ${body.incomplete_details?.reason || "the provider did not finish the response"}.`);
+    throw new Error("Lead Finder web search completed but returned no final structured text. Try a narrower search.");
+  }
   let parsed: Partial<FinderResult>; try { parsed = JSON.parse(raw) as Partial<FinderResult>; } catch { throw new Error("Lead Finder returned malformed structured JSON. Try a narrower search."); }
   if (typeof parsed.assistantMessage !== "string" || !Array.isArray(parsed.candidates)) throw new Error("Lead Finder returned an incomplete structured response. Try again.");
   const candidates = validCandidates(parsed); if (!candidates.length) throw new Error("Lead Finder found no grounded candidates with valid public source URLs. Try a narrower search.");
