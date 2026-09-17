@@ -45,5 +45,6 @@ next-env.d.ts
 /outputs/
 /work/
 /_stage_publish/
+/_stage_publish_2/
 *.tar.gz
 *.tsbuildinfo
