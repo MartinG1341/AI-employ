@@ -57,9 +57,10 @@ export const openAICompatibleProvider: AIProvider = { async generateText({ promp
 } };
 export function getAIProvider(): AIProvider {
   const configured = (process.env.AI_PROVIDER || "").trim().toLowerCase();
-  if (configured === "openai") return openAIProvider;
+  if (configured === "mock") return mockProvider;
+  if (process.env.OPENAI_API_KEY?.trim()) return openAIProvider;
   if (configured === "openai-compatible") return openAICompatibleProvider;
-  if (!configured && process.env.OPENAI_API_KEY) return openAIProvider;
   return mockProvider;
 }
-export function getAIProviderName(): "OpenAI" | "OpenAI-compatible" | "Mock" { const configured = (process.env.AI_PROVIDER || "").trim().toLowerCase(); if (configured === "openai" || (!configured && process.env.OPENAI_API_KEY)) return "OpenAI"; if (configured === "openai-compatible") return "OpenAI-compatible"; return "Mock"; }
+export function getAIProviderName(): "OpenAI" | "OpenAI-compatible" | "Mock" { const configured = (process.env.AI_PROVIDER || "").trim().toLowerCase(); if (configured === "mock") return "Mock"; if (process.env.OPENAI_API_KEY?.trim()) return "OpenAI"; if (configured === "openai-compatible") return "OpenAI-compatible"; return "Mock"; }
+export function getAIProviderDiagnostics() { const provider = getAIProviderName(); return { provider, model: provider === "OpenAI" ? process.env.OPENAI_MODEL?.trim() || defaultOpenAIModel : provider === "OpenAI-compatible" ? process.env.AI_MODEL?.trim() || null : null, hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY?.trim()) }; }
