@@ -1,4 +1,4 @@
-export type AIProvider = { generateText(input: { prompt: string; tone?: string }): Promise<string> };
+export type AIProvider = { generateText(input: { prompt: string; tone?: string; purpose?: "message" | "research"; maxTokens?: number; responseFormat?: "json_object"; temperature?: number }): Promise<string> };
 export const mockProvider: AIProvider = { async generateText({ prompt }) { return `Mock suggestion based on the available facts: ${prompt.slice(0, 180)}…`; } };
 
 type ContentPart = { type?: string; text?: string } | string;
@@ -21,9 +21,12 @@ function providerError(body: ChatResponse | null): string {
   return "request failed";
 }
 const defaultOpenAIModel = "gpt-4o-mini";
-async function requestChat(baseUrl: string, model: string, apiKey: string, prompt: string, tone?: string, extraHeaders: Record<string, string> = {}) {
+async function requestChat(baseUrl: string, model: string, apiKey: string, input: { prompt: string; tone?: string; purpose?: "message" | "research"; maxTokens?: number; responseFormat?: "json_object"; temperature?: number }, extraHeaders: Record<string, string> = {}) {
   const headers: Record<string, string> = { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, ...extraHeaders };
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers, body: JSON.stringify({ model, temperature: 0.7, max_tokens: 220, messages: [{ role: "system", content: "You write concise Instagram outreach messages. Return only the final user-visible text." }, { role: "user", content: `${prompt}\nTone: ${tone || "casual"}` }] }), cache: "no-store" });
+  const isResearch = input.purpose === "research";
+  const payload: Record<string, unknown> = { model, temperature: input.temperature ?? (isResearch ? 0.2 : 0.7), max_tokens: input.maxTokens ?? (isResearch ? 1000 : 220), messages: [{ role: "system", content: isResearch ? "You produce careful structured research JSON. Return only the requested JSON object. Never invent facts." : "You write concise Instagram outreach messages. Return only the final user-visible text." }, { role: "user", content: `${input.prompt}\nTone: ${input.tone || "casual"}` }] };
+  if (input.responseFormat) payload.response_format = { type: input.responseFormat };
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers, body: JSON.stringify(payload), cache: "no-store" });
   const body = await response.json().catch(() => null) as ChatResponse | null;
   if (!response.ok) throw new Error(`AI provider ${response.status}: ${providerError(body)}`);
   const text = finalText(body);
@@ -35,7 +38,7 @@ function openAIConfig() {
   if (!apiKey) throw new Error("AI_PROVIDER=openai requires OPENAI_API_KEY.");
   return { apiKey, model: process.env.OPENAI_MODEL?.trim() || defaultOpenAIModel };
 }
-export const openAIProvider: AIProvider = { async generateText({ prompt, tone }) { const { apiKey, model } = openAIConfig(); return requestChat("https://api.openai.com/v1", model, apiKey, prompt, tone); } };
+export const openAIProvider: AIProvider = { async generateText(input) { const { apiKey, model } = openAIConfig(); return requestChat("https://api.openai.com/v1", model, apiKey, input); } };
 function compatibleConfig() {
   const baseUrl = process.env.AI_BASE_URL?.trim();
   const model = process.env.AI_MODEL?.trim();

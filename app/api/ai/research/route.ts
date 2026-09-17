@@ -16,7 +16,7 @@ function parse(raw: string, lead: Record<string, unknown>): Research {
     return { summary: value.summary, knownFacts: value.knownFacts.map(String), inferences: value.inferences.map(String), potentialProblems: value.potentialProblems.map(String), relevance: value.relevance, outreachAngle: value.outreachAngle, doNotClaim: value.doNotClaim.map(String) };
   } catch (error) {
     if ((process.env.AI_PROVIDER || "mock").trim().toLowerCase() === "mock") return fallback(lead);
-    throw new Error(`AI research returned invalid JSON: ${error instanceof Error ? error.message : "invalid response"}`);
+    throw new Error(`AI research returned incomplete or invalid structured JSON. ${error instanceof Error && error.name !== "SyntaxError" ? error.message : "Try Research Lead again."}`);
   }
 }
 export async function POST(request: Request) {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     if (!lead) return NextResponse.json({ error: "Lead not found." }, { status: 404 });
     const settings = await supabaseRequest<Record<string, unknown>[]>("sales_settings?select=kind,payload&app_id=eq.sales_copilot&order=updated_at.desc&limit=1");
     const prompt = [`Analyze this Sales Copilot lead using only the supplied information. Return ONLY valid JSON with exactly these fields: summary, knownFacts, inferences, potentialProblems, relevance, outreachAngle, doNotClaim. Every list must contain strings.`, `Never invent facts, revenue, customer volume, Instagram DM volume, posts, content, or business problems. Put directly supported information only in knownFacts. Put reasonable but unconfirmed interpretations only in inferences. Treat potentialProblems as possibilities, never facts. Say when information is limited. Do not create fake personalization.`, `Lead data: business_name=${text(lead.business_name)}; instagram_username=${text(lead.instagram_username)}; instagram_url=${text(lead.instagram_url)}; website=${text(lead.website)}; category=${text(lead.category)}; description=${text(lead.description)}; bio=${text(lead.bio)}; notes=${text(lead.notes)}; products_services=${text(lead.products_services)}; customer_contact_method=${text(lead.customer_contact_method)}; relevance_summary=${text(lead.relevance_summary)}; research_summary=${text(lead.research_summary)}; known_facts=${text(lead.known_facts)}; ai_inferences=${text(lead.ai_inferences)}; Sales Copilot settings=${text(settings[0]?.payload)}`].join("\n");
-    const research = parse(await getAIProvider().generateText({ prompt, tone: "direct" }), lead);
+    const research = parse(await getAIProvider().generateText({ prompt, tone: "direct", purpose: "research", maxTokens: 1000, responseFormat: "json_object", temperature: 0.2 }), lead);
     const updated = await updateLead(body.leadId, { research_summary: research.summary, known_facts: research.knownFacts, ai_inferences: { items: research.inferences, potentialProblems: research.potentialProblems, outreachAngle: research.outreachAngle, doNotClaim: research.doNotClaim }, relevance_summary: research.relevance });
     await addLeadActivity(body.leadId, "research_generated", research.summary, { outreach_angle: research.outreachAngle });
     return NextResponse.json({ ...research, lead: updated });
