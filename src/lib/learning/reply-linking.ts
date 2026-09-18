@@ -6,7 +6,7 @@ import type { OutcomeType, OutcomeSuggestion } from "./types";
 
 type Message = { id: string; conversation_id: string; body: string; sent_at: string; direction: "inbound" | "outbound" };
 type Conversation = { id: string; lead_id: string | null };
-type Variant = { id: string; experiment_id: string; message: string; sent: boolean; sent_at: string | null };
+type Variant = { id: string; experiment_id: string; message: string; edited_final_text: string | null; sent: boolean; sent_at: string | null };
 type Experiment = { id: string; lead_id: string };
 type SuggestionInput = { outcome: Exclude<OutcomeType, "reply_received">; confidence: number; reason: string };
 
@@ -51,11 +51,11 @@ async function findLink(message: Message) {
   const experiments = await supabaseRequest<Experiment[]>(`sales_ai_experiments?lead_id=eq.${encodeURIComponent(leadId)}&app_id=eq.sales_copilot&select=id,lead_id`);
   if (!experiments.length) return { variantId: null, confidence: "low" as const, method: "no_experiment_for_lead" };
   const ids = experiments.map(e => e.id).join(",");
-  const variants = await supabaseRequest<Variant[]>(`sales_ai_message_variants?experiment_id=in.(${encodeURIComponent(ids)})&app_id=eq.sales_copilot&sent=eq.true&sent_at=not.is.null&select=id,experiment_id,message,sent,sent_at&order=sent_at.desc`);
+  const variants = await supabaseRequest<Variant[]>(`sales_ai_message_variants?experiment_id=in.(${encodeURIComponent(ids)})&app_id=eq.sales_copilot&sent=eq.true&sent_at=not.is.null&select=id,experiment_id,message,edited_final_text,sent,sent_at&order=sent_at.desc`);
   const candidates = variants.filter(v => v.sent_at && new Date(v.sent_at).getTime() <= new Date(message.sent_at).getTime());
   if (!candidates.length) return { variantId: null, confidence: "low" as const, method: "no_sent_variant_before_reply" };
   const outbound = await supabaseRequest<Message[]>(`sales_messages?conversation_id=eq.${encodeURIComponent(message.conversation_id)}&app_id=eq.sales_copilot&direction=eq.outbound&select=id,conversation_id,body,sent_at,direction`);
-  const exact = candidates.find(v => outbound.some(m => normalize(m.body) === normalize(v.message) && new Date(m.sent_at).getTime() <= new Date(message.sent_at).getTime()));
+  const exact = candidates.find(v => outbound.some(m => [v.edited_final_text, v.message].filter((value): value is string => Boolean(value)).some(text => normalize(m.body) === normalize(text)) && new Date(m.sent_at).getTime() <= new Date(message.sent_at).getTime()));
   if (exact) return { variantId: exact.id, confidence: "high" as const, method: "exact_outbound_text" };
   return { variantId: candidates[0].id, confidence: candidates.length === 1 ? "medium" as const : "low" as const, method: candidates.length === 1 ? "single_recent_sent_variant" : "ambiguous_recent_sent_variants" };
 }
