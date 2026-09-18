@@ -12,6 +12,7 @@ export const BUSINESS_RULES = Object.freeze({
 });
 
 const humanRules: Array<[RegExp, string, string]> = [
+  [/(cold\s*dm|random instagram users|automatically message strangers)/i, "unsupported_capability", "Unsupported or unverified automation capability requires human review."],
   [/\b(legal|lawyer|contract|terms and conditions|agreement)\b/i, "legal_or_contract", "Legal or contractual content requires human review."],
   [/\b(refund|chargeback|payment dispute|dispute|fraud)\b/i, "payment_or_refund_dispute", "Payment, refund, or dispute content requires human review."],
   [/\b(complaint|complain|terrible|scam|report you|sue|threat|harass)\b/i, "complaint_or_threat", "Complaints, threats, or harassment require human review."],
