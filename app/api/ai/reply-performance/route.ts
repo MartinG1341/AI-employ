@@ -1,0 +1,3 @@
+import { NextResponse } from "next/server";
+import { getReplyPerformance } from "@/src/lib/learning/service";
+export async function GET(request: Request) { try { const query = new URL(request.url).searchParams; return NextResponse.json({ performance: await getReplyPerformance({ category: query.get("category") || undefined, platform: query.get("platform") || undefined, replyIntent: query.get("replyIntent") || undefined, responseStrategy: query.get("responseStrategy") || undefined }) }); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to calculate reply performance." }, { status: 400 }); } }

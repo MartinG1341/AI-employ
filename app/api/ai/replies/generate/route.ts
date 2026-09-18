@@ -1,0 +1,3 @@
+import { NextResponse } from "next/server";
+import { generateReplyExperiment } from "@/src/lib/learning/reply-service";
+export async function POST(request: Request) { try { const body = await request.json() as { messageId?: unknown; leadId?: unknown }; if (typeof body.messageId !== "string" || typeof body.leadId !== "string") return NextResponse.json({ error: "messageId and leadId are required." }, { status: 400 }); return NextResponse.json(await generateReplyExperiment(body.messageId, body.leadId)); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to generate reply strategies." }, { status: 400 }); } }

@@ -1,6 +1,7 @@
 import { getAIProvider, getAIProviderName } from "@/src/lib/ai/provider";
 import { supabaseRequest } from "@/src/lib/supabase/server";
 import { recordOutcome } from "./service";
+import { decideReply } from "@/src/lib/reply-decision/service";
 import type { OutcomeType, OutcomeSuggestion } from "./types";
 
 type Message = { id: string; conversation_id: string; body: string; sent_at: string; direction: "inbound" | "outbound" };
@@ -61,16 +62,17 @@ async function findLink(message: Message) {
 
 export async function processInboundReply(message: Message) {
   if (message.direction !== "inbound") return { skipped: true };
+  const decision = await decideReply({ message: message.body, messageId: message.id });
   const link = await findLink(message);
   await supabaseRequest(`sales_messages?id=eq.${encodeURIComponent(message.id)}&app_id=eq.sales_copilot`, { method: "PATCH", body: JSON.stringify({ linked_variant_id: link.variantId, learning_link_confidence: link.confidence, learning_link_method: link.method }) });
-  if (!link.variantId) return { link, suggestion: null, replyOutcome: null };
+  if (!link.variantId) return { decision, link, suggestion: null, replyOutcome: null };
   let replyOutcome: unknown = null;
   if (link.confidence === "high" || link.confidence === "medium") replyOutcome = (await recordOutcome(link.variantId, "reply_received", "instagram_sync", { message_id: message.id, confidence: link.confidence, method: link.method }, `reply_received:${message.id}`)).outcome;
   const classified = await classifyReply(message.body);
   const existing = await supabaseRequest<OutcomeSuggestion[]>(`sales_ai_outcome_suggestions?message_id=eq.${encodeURIComponent(message.id)}&app_id=eq.sales_copilot&select=*`);
-  if (existing[0]) return { link, suggestion: existing[0], replyOutcome };
+  if (existing[0]) return { decision, link, suggestion: existing[0], replyOutcome };
   const created = await supabaseRequest<OutcomeSuggestion[]>("sales_ai_outcome_suggestions", { method: "POST", body: JSON.stringify({ app_id: "sales_copilot", message_id: message.id, variant_id: link.variantId, suggested_outcomes: classified.suggestions, overall_confidence: classified.overallConfidence }) });
-  return { link, suggestion: created[0] || null, replyOutcome };
+  return { decision, link, suggestion: created[0] || null, replyOutcome };
 }
 
 export async function listOutcomeSuggestions(leadId?: string) {

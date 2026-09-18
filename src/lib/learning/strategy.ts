@@ -11,3 +11,10 @@ export function chooseRecommendation<T extends { strategy_metadata: StrategyMeta
   if (meaningful.length && random() >= EXPLORATION_RATE) return meaningful.sort((a, b) => (performance.get(b.strategy_metadata.openerType)?.replyRate ?? 0) - (performance.get(a.strategy_metadata.openerType)?.replyRate ?? 0))[0];
   return variants[Math.floor(random() * variants.length)];
 }
+
+export function chooseReplyRecommendation<T extends { strategy_metadata: StrategyMetadata }>(variants: T[], performance: Map<string, Performance>, random = Math.random) {
+  if (!variants.length) return null;
+  const meaningful = variants.filter(variant => performance.get(variant.strategy_metadata.responseStrategy || "")?.meaningful);
+  if (meaningful.length && random() >= EXPLORATION_RATE) return meaningful.sort((a, b) => (performance.get(b.strategy_metadata.responseStrategy || "")?.replyRate ?? 0) - (performance.get(a.strategy_metadata.responseStrategy || "")?.replyRate ?? 0))[0];
+  return variants[Math.floor(random() * variants.length)];
+}
