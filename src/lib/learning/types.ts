@@ -1,7 +1,7 @@
 export const OUTCOME_TYPES = ["no_reply", "reply_received", "reply_neutral", "reply_positive", "reply_negative", "not_interested", "asks_price", "asks_demo", "asks_more_info", "meeting_booked", "converted", "blocked"] as const;
 export type OutcomeType = (typeof OUTCOME_TYPES)[number];
 export type ExperimentType = "opener" | "reply";
-export type StrategyMetadata = { openerType: string; ctaType: string; tone: string; personalizationType: string; lengthClass: string; replyIntent?: string; responseStrategy?: string; niche?: string; platform?: string };
+export type StrategyMetadata = { openerType: string; ctaType: string; tone: string; personalizationType: string; lengthClass: string; replyIntent?: string; responseStrategy?: string; niche?: string; platform?: string; knowledgeRefs?: string[] };
 export type Variant = { id: string; experiment_id: string; variant_key: string; message: string; strategy_metadata: StrategyMetadata; selected: boolean; sent: boolean; sent_at: string | null; edited_final_text?: string | null; created_at: string; experiment_type?: ExperimentType };
 export type Experiment = { id: string; lead_id: string; objective: string; status: string; experiment_type?: ExperimentType; inbound_message_id?: string | null; conversation_id?: string | null; recommended_variant_id: string | null; selected_variant_id: string | null; created_at: string; variants?: Variant[] };
 export type Outcome = { id: string; variant_id: string; outcome_type: OutcomeType; source: string; metadata: Record<string, unknown>; idempotency_key: string; created_at: string };
