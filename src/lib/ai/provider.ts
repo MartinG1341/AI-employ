@@ -1,5 +1,5 @@
 export type AIResponseFormat = "json_object" | { type: "json_schema"; json_schema: { name: string; strict: boolean; schema: Record<string, unknown> } };
-export type AIProvider = { generateText(input: { prompt: string; tone?: string; purpose?: "message" | "research" | "experiment"; maxTokens?: number; responseFormat?: AIResponseFormat; temperature?: number }): Promise<string> };
+export type AIProvider = { generateText(input: { prompt: string; tone?: string; purpose?: "message" | "research" | "experiment" | "classification"; maxTokens?: number; responseFormat?: AIResponseFormat; temperature?: number }): Promise<string> };
 export const mockProvider: AIProvider = { async generateText({ prompt }) { return `Mock suggestion based on the available facts: ${prompt.slice(0, 180)}…`; } };
 
 type ContentPart = { type?: string; text?: string } | string;
@@ -22,10 +22,10 @@ function providerError(body: ChatResponse | null): string {
   return "request failed";
 }
 const defaultOpenAIModel = "gpt-4o-mini";
-async function requestChat(baseUrl: string, model: string, apiKey: string, input: { prompt: string; tone?: string; purpose?: "message" | "research" | "experiment"; maxTokens?: number; responseFormat?: AIResponseFormat; temperature?: number }, extraHeaders: Record<string, string> = {}) {
+async function requestChat(baseUrl: string, model: string, apiKey: string, input: { prompt: string; tone?: string; purpose?: "message" | "research" | "experiment" | "classification"; maxTokens?: number; responseFormat?: AIResponseFormat; temperature?: number }, extraHeaders: Record<string, string> = {}) {
   const headers: Record<string, string> = { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, ...extraHeaders };
-  const isStructured = input.purpose === "research" || input.purpose === "experiment";
-  const systemInstruction = input.purpose === "research" ? "You produce careful structured research JSON. Return only the requested JSON object. Never invent facts." : input.purpose === "experiment" ? "You produce structured outreach experiment JSON. Return only the requested JSON object. Never invent facts." : "You write concise Instagram outreach messages. Return only the final user-visible text.";
+  const isStructured = input.purpose === "research" || input.purpose === "experiment" || input.purpose === "classification";
+  const systemInstruction = input.purpose === "research" ? "You produce careful structured research JSON. Return only the requested JSON object. Never invent facts." : input.purpose === "experiment" ? "You produce structured outreach experiment JSON. Return only the requested JSON object. Never invent facts." : input.purpose === "classification" ? "You classify an inbound sales reply into conservative structured JSON. Return only the requested JSON object. Do not infer hidden thoughts or invent facts." : "You write concise Instagram outreach messages. Return only the final user-visible text.";
   const payload: Record<string, unknown> = { model, temperature: input.temperature ?? (isStructured ? 0.2 : 0.7), max_tokens: input.maxTokens ?? (isStructured ? 1000 : 220), messages: [{ role: "system", content: systemInstruction }, { role: "user", content: `${input.prompt}\nTone: ${input.tone || "casual"}` }] };
   if (input.responseFormat) payload.response_format = typeof input.responseFormat === "string" ? { type: input.responseFormat } : input.responseFormat;
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers, body: JSON.stringify(payload), cache: "no-store" });

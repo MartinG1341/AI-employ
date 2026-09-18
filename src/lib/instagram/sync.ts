@@ -1,4 +1,5 @@
 import { supabaseRequest } from "@/src/lib/supabase/server";
+import { processInboundReply } from "@/src/lib/learning/reply-linking";
 import { getConversationMessages, getConversations } from "./client";
 import type { Connection } from "./repository";
 
@@ -21,7 +22,11 @@ export async function syncConversations(connection: Connection) {
     for (const message of messages.data) {
       const prior = await supabaseRequest<{ id: string }[]>(`sales_messages?app_id=eq.sales_copilot&instagram_message_id=eq.${encodeURIComponent(message.id)}&select=id`);
       if (prior.length) continue;
-      await supabaseRequest<unknown>("sales_messages", { method: "POST", body: JSON.stringify({ app_id: "sales_copilot", conversation_id: conversationId, instagram_message_id: message.id, direction: message.from?.id === connection.instagram_user_id ? "outbound" : "inbound", body: message.message || "[Non-text message]", sent_at: message.created_time || new Date().toISOString() }) });
+      const direction = message.from?.id === connection.instagram_user_id ? "outbound" : "inbound";
+      const body = message.message || "[Non-text message]";
+      const sentAt = message.created_time || new Date().toISOString();
+      const storedMessage = await supabaseRequest<{ id: string }[]>("sales_messages", { method: "POST", body: JSON.stringify({ app_id: "sales_copilot", conversation_id: conversationId, instagram_message_id: message.id, direction, body, sent_at: sentAt }) });
+      if (direction === "inbound" && storedMessage[0]) await processInboundReply({ id: storedMessage[0].id, conversation_id: conversationId, direction, body, sent_at: sentAt });
       messagesSynced++;
     }
     if (leadId) await supabaseRequest<unknown>(`sales_leads?id=eq.${encodeURIComponent(leadId)}&app_id=eq.sales_copilot`, { method: "PATCH", body: JSON.stringify({ instagram_conversation_id: item.id, updated_at: new Date().toISOString() }) });
