@@ -28,6 +28,6 @@ export function instagramConfig({ requireSecret = true }: InstagramConfigOptions
 
 export function getInstagramOAuthUrl(state: string) {
   const { appId, redirect } = instagramConfig({ requireSecret: false });
-  const params = new URLSearchParams({ client_id: appId, redirect_uri: redirect, response_type: "code", scope: instagramScopes.join(","), state, enable_fb_login: "0", force_authentication: "1" });
+  const params = new URLSearchParams({ client_id: appId, redirect_uri: redirect, response_type: "code", scope: instagramScopes.join(","), state });
   return `https://www.instagram.com/oauth/authorize?${params}`;
 }
