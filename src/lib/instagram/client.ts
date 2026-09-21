@@ -35,8 +35,66 @@ const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 export async function getInstagramAccount(token: string) {
   return metaFetch<{ id: string; user_id?: string; username: string; name?: string; profile_picture_url?: string; account_type?: string }>(graphUrl("me", { fields: "user_id,id,username,name,profile_picture_url,account_type" }), { headers: auth(token) });
 }
+
+type InstagramConversation = {
+  id: string;
+  updated_time?: string;
+  participants?: { data?: { id: string; username?: string }[] };
+  messages?: { data?: { id: string; message?: string; from?: { id: string; username?: string }; to?: { data?: { id: string }[] }; created_time?: string }[] };
+};
+type ConversationPaging = { next?: string; cursors?: { before?: string; after?: string } };
+type ConversationPage = { data?: InstagramConversation[]; paging?: ConversationPaging; error?: { code?: number; error_subcode?: number; message?: string } };
+type ConversationPageResult = { page: number; dataCount: number; hasNext: boolean };
+const maxConversationPages = 10;
+
+function conversationUrl(accountId: string) {
+  return graphUrl(`${encodeURIComponent(accountId)}/conversations`, { platform: "instagram", limit: "50", fields: "id,updated_time,participants,messages.limit(25){id,created_time,from,to,message}" });
+}
+
+function nextConversationUrl(baseUrl: string, paging?: ConversationPaging) {
+  if (paging?.next) {
+    const next = new URL(paging.next);
+    next.searchParams.delete("access_token");
+    return next.toString();
+  }
+  if (paging?.cursors?.after) {
+    const next = new URL(baseUrl);
+    next.searchParams.set("after", paging.cursors.after);
+    return next.toString();
+  }
+  return null;
+}
+
+async function fetchConversationPages(token: string, accountId: string) {
+  const baseUrl = conversationUrl(accountId);
+  const seenUrls = new Set<string>();
+  const seenCursors = new Set<string>();
+  const conversations = new Map<string, InstagramConversation>();
+  const pageResults: ConversationPageResult[] = [];
+  let nextUrl: string | null = baseUrl;
+  let lastPaging: ConversationPaging | undefined;
+
+  for (let page = 1; page <= maxConversationPages && nextUrl; page += 1) {
+    if (seenUrls.has(nextUrl)) break;
+    seenUrls.add(nextUrl);
+    const response = await metaFetch<ConversationPage>(nextUrl, { headers: auth(token) });
+    for (const conversation of response.data ?? []) conversations.set(conversation.id, conversation);
+    lastPaging = response.paging;
+    const followingUrl = nextConversationUrl(baseUrl, response.paging);
+    const cursor = response.paging?.cursors?.after;
+    pageResults.push({ page, dataCount: response.data?.length ?? 0, hasNext: Boolean(followingUrl) });
+    if (cursor) {
+      if (seenCursors.has(cursor)) break;
+      seenCursors.add(cursor);
+    }
+    nextUrl = followingUrl;
+  }
+
+  return { data: [...conversations.values()], paging: lastPaging, pagesFetched: pageResults.length, pageResults };
+}
+
 export async function getConversations(token: string, accountId: string) {
-  return metaFetch<{ data: { id: string; updated_time?: string; participants?: { data?: { id: string; username?: string }[] }; messages?: { data?: { id: string; message?: string; from?: { id: string; username?: string }; to?: { data?: { id: string }[] }; created_time?: string }[] } }[]; paging?: { next?: string; cursors?: { after?: string } } }>(graphUrl(`${encodeURIComponent(accountId)}/conversations`, { platform: "instagram", limit: "50", fields: "id,updated_time,participants,messages.limit(25){id,created_time,from,to,message}" }), { headers: auth(token) });
+  return fetchConversationPages(token, accountId);
 }
 
 type SafeMetaDiagnostic = {
@@ -66,31 +124,62 @@ async function safeMetaDiagnosticRequest(path: string, token: string): Promise<S
 }
 
 export async function getRawConversationDiagnostics(token: string, storedUserId: string) {
-  const path = `${encodeURIComponent(storedUserId)}/conversations`;
-  const url = graphUrl(path, { platform: "instagram", limit: "50", fields: "id,updated_time,participants,messages.limit(25){id,created_time,from,to,message}" });
-  const response = await fetch(url, { headers: auth(token), cache: "no-store" });
-  const raw = await response.text();
-  let data: {
-    data?: { id?: string; updated_time?: string }[];
-    paging?: { next?: string; cursors?: { before?: string; after?: string } };
-    error?: { code?: number; error_subcode?: number; message?: string };
-  } = {};
-  try { data = JSON.parse(raw); } catch { /* Report status and shape without returning the raw body. */ }
+  const url = conversationUrl(storedUserId);
+  const seenUrls = new Set<string>();
+  const seenCursors = new Set<string>();
+  const conversations = new Map<string, { id: string | null; updated_time: string | null }>();
+  const pageResults: ConversationPageResult[] = [];
+  let nextUrl: string | null = url;
+  let firstStatus = 0;
+  let firstData: ConversationPage = {};
+  let diagnosticError: ConversationPage["error"];
+  let pagesFetched = 0;
+
+  for (let page = 1; page <= maxConversationPages && nextUrl; page += 1) {
+    if (seenUrls.has(nextUrl)) break;
+    seenUrls.add(nextUrl);
+    const response = await fetch(nextUrl, { headers: auth(token), cache: "no-store" });
+    const raw = await response.text();
+    let data: ConversationPage = {};
+    try { data = JSON.parse(raw); } catch { /* Report status and shape without returning the raw body. */ }
+    if (page === 1) {
+      firstStatus = response.status;
+      firstData = data;
+    }
+    pagesFetched = page;
+    diagnosticError = data.error;
+    for (const conversation of data.data ?? []) {
+      conversations.set(conversation.id, { id: conversation.id, updated_time: conversation.updated_time ?? null });
+    }
+    const followingUrl = nextConversationUrl(url, data.paging);
+    const cursor = data.paging?.cursors?.after;
+    pageResults.push({ page, dataCount: data.data?.length ?? 0, hasNext: Boolean(followingUrl) });
+    if (!response.ok || data.error) break;
+    if (cursor) {
+      if (seenCursors.has(cursor)) break;
+      seenCursors.add(cursor);
+    }
+    nextUrl = followingUrl;
+  }
+
   const parsedUrl = new URL(url);
   const me = await safeMetaDiagnosticRequest("me", token);
   const stored = await safeMetaDiagnosticRequest(encodeURIComponent(storedUserId), token);
   return {
     request: { host: parsedUrl.host, path: parsedUrl.pathname, userId: storedUserId, apiVersion, platform: "instagram" },
-    httpStatus: response.status,
+    httpStatus: firstStatus,
     metaResponse: {
-      dataCount: data.data?.length ?? 0,
-      hasPaging: Boolean(data.paging),
-      paging: data.paging ? { hasNext: Boolean(data.paging.next), cursorKeys: Object.keys(data.paging.cursors ?? {}) } : null,
-      errorCode: data.error?.code ?? null,
-      errorSubcode: data.error?.error_subcode ?? null,
-      errorMessage: safeDiagnosticMessage(data.error?.message),
+      dataCount: firstData.data?.length ?? 0,
+      hasPaging: Boolean(firstData.paging),
+      paging: firstData.paging ? { hasNext: Boolean(nextConversationUrl(url, firstData.paging)), cursorKeys: Object.keys(firstData.paging.cursors ?? {}) } : null,
+      errorCode: diagnosticError?.code ?? null,
+      errorSubcode: diagnosticError?.error_subcode ?? null,
+      errorMessage: safeDiagnosticMessage(diagnosticError?.message),
     },
-    conversations: (data.data ?? []).map((conversation) => ({ id: conversation.id ?? null, updated_time: conversation.updated_time ?? null })),
+    pagesFetched,
+    pageResults,
+    totalConversationsFound: conversations.size,
+    conversations: [...conversations.values()],
     identity: { me, stored },
   };
 }
