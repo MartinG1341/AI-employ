@@ -53,9 +53,8 @@ function conversationUrl(accountId: string) {
 
 function nextConversationUrl(baseUrl: string, paging?: ConversationPaging) {
   if (paging?.next) {
-    const next = new URL(paging.next);
-    next.searchParams.delete("access_token");
-    return next.toString();
+    // Meta's paging URL is opaque; follow it exactly, but never return or log it.
+    return new URL(paging.next).toString();
   }
   if (paging?.cursors?.after) {
     const next = new URL(baseUrl);
