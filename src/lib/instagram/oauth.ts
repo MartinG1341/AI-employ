@@ -2,10 +2,10 @@ const productionCallback = "https://sales-copilot-one.vercel.app/api/instagram/c
 export const instagramScopes = ["instagram_business_basic", "instagram_business_manage_messages"];
 
 export function metaConfig() {
-  const appId = process.env.META_APP_ID;
+  const appId = process.env.INSTAGRAM_APP_ID;
   const secret = process.env.META_APP_SECRET;
   const redirect = process.env.META_REDIRECT_URI || productionCallback;
-  if (!appId || !secret) throw new Error("Missing Meta credentials. Configure META_APP_ID and META_APP_SECRET.");
+  if (!appId || !secret) throw new Error("Missing Instagram Login credentials. Configure INSTAGRAM_APP_ID and META_APP_SECRET.");
   if (process.env.NODE_ENV === "production" && redirect !== productionCallback) throw new Error(`META_REDIRECT_URI must be ${productionCallback}`);
   return { appId, secret, redirect };
 }
