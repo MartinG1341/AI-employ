@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getInstagramAccount, getInstagramPermissions, getConversations, getConversationMessages, sendInstagramReply } from "@/src/lib/instagram/client";
+import { getInstagramAccount, getConversations, getConversationMessages, sendInstagramReply } from "@/src/lib/instagram/client";
 import { isAdmin, safeMetaMessage, sameOrigin } from "@/src/lib/instagram/admin";
 import { getConnection, saveMetaError } from "@/src/lib/instagram/repository";
 import { syncConversations } from "@/src/lib/instagram/sync";
@@ -12,7 +12,10 @@ async function run(request: NextRequest, write: boolean) {
     if (!connection) return NextResponse.json({ error: "Instagram is not connected." }, { status: 409 });
     const token = connection.access_token;
     if (action === "account" && !write) return NextResponse.json(await getInstagramAccount(token));
-    if (action === "permissions" && !write) return NextResponse.json(await getInstagramPermissions(token));
+    if (action === "permissions" && !write) {
+      const scopes = connection.scopes ?? [];
+      return NextResponse.json({ source: "oauth_token_exchange", permissions_endpoint_supported: false, data: scopes.map(permission => ({ permission, status: "granted" })) });
+    }
     if (action === "conversations" && !write) { const data = await getConversations(token, connection.instagram_user_id); return NextResponse.json({ count: data.data.length, conversations: data.data }); }
     if (action === "messages" && !write) {
       const conversationId = request.nextUrl.searchParams.get("conversation_id") || "";
@@ -25,8 +28,7 @@ async function run(request: NextRequest, write: boolean) {
       const body = await request.json() as { conversation_id?: string; message?: string };
       const message = body.message?.trim() ?? "";
       if (!message || message.length > 1000) return NextResponse.json({ error: "Reply must be 1–1000 characters." }, { status: 400 });
-      const permissions = await getInstagramPermissions(token);
-      if (!permissions.data.some(p => p.permission === "instagram_business_manage_messages" && p.status === "granted")) return NextResponse.json({ error: "Missing instagram_business_manage_messages permission." }, { status: 403 });
+      if (!(connection.scopes ?? []).includes("instagram_business_manage_messages")) return NextResponse.json({ error: "Missing instagram_business_manage_messages permission." }, { status: 403 });
       const conversations = await getConversations(token, connection.instagram_user_id);
       const conversation = conversations.data.find(c => c.id === body.conversation_id);
       const recipient = conversation?.participants?.data?.find(p => p.id !== connection.instagram_user_id);

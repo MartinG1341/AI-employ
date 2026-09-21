@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, safeMetaMessage, stateCookie } from "@/src/lib/instagram/admin";
-import { exchangeInstagramCode, extendInstagramToken, getInstagramAccount, getInstagramPermissions } from "@/src/lib/instagram/client";
+import { exchangeInstagramCode, extendInstagramToken, getInstagramAccount } from "@/src/lib/instagram/client";
 import { saveConnection } from "@/src/lib/instagram/repository";
 function back(request: NextRequest, error?: string) {
   const url = new URL("/", request.url);
@@ -26,8 +26,7 @@ export async function GET(request: NextRequest) {
     const long = await extendInstagramToken(short.access_token);
     const account = await getInstagramAccount(long.access_token);
     if (!account.id || !account.username) throw new Error("Instagram Professional account not found.");
-    let scopes = short.permissions ?? [];
-    try { const permissions = await getInstagramPermissions(long.access_token); scopes = permissions.data.filter(p => p.status === "granted").map(p => p.permission); } catch { /* diagnostics can retry */ }
+    const scopes = short.permissions ?? [];
     await saveConnection({ instagram_user_id: account.id, username: account.username, profile: account, access_token: long.access_token, token_expires_at: long.expires_in ? new Date(Date.now() + long.expires_in * 1000).toISOString() : null, scopes });
     return back(request);
   } catch (caught) { return back(request, safeMetaMessage(caught)); }
