@@ -1,7 +1,7 @@
 import { instagramConfig } from "./oauth";
 
 type MetaError = { error?: { message?: string; code?: number } };
-const graph = "https://graph.instagram.com/v23.0";
+const graph = `https://graph.instagram.com/${process.env.INSTAGRAM_GRAPH_API_VERSION ?? "v26.0"}`;
 
 async function metaFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(url, { ...init, cache: "no-store" });
@@ -31,7 +31,7 @@ export async function getInstagramAccount(token: string) {
   return metaFetch<{ id: string; user_id?: string; username: string; name?: string; profile_picture_url?: string; account_type?: string }>(graphUrl("me", { fields: "user_id,id,username,name,profile_picture_url,account_type" }), { headers: auth(token) });
 }
 export async function getConversations(token: string, accountId: string) {
-  return metaFetch<{ data: { id: string; updated_time?: string; participants?: { data?: { id: string; username?: string }[] } }[]; paging?: { next?: string; cursors?: { after?: string } } }>(graphUrl(`${encodeURIComponent(accountId)}/conversations`, { fields: "id,updated_time,participants", limit: "25" }), { headers: auth(token) });
+  return metaFetch<{ data: { id: string; updated_time?: string; participants?: { data?: { id: string; username?: string }[] }; messages?: { data?: { id: string; message?: string; from?: { id: string; username?: string }; to?: { data?: { id: string }[] }; created_time?: string }[] } }[]; paging?: { next?: string; cursors?: { after?: string } } }>(graphUrl(`${encodeURIComponent(accountId)}/conversations`, { platform: "instagram", limit: "50", fields: "id,updated_time,participants,messages.limit(25){id,created_time,from,to,message}" }), { headers: auth(token) });
 }
 export async function getConversationMessages(token: string, conversationId: string) {
   const response = await metaFetch<{ messages?: { data?: { id: string; message?: string; from?: { id: string; username?: string }; to?: { data?: { id: string }[] }; created_time?: string }[]; paging?: { next?: string; cursors?: { after?: string } } } }>(graphUrl(encodeURIComponent(conversationId), { fields: "messages.limit(25){id,message,from,to,created_time}" }), { headers: auth(token) });
