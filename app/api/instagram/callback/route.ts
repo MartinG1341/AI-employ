@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const account = await getInstagramAccount(long.access_token);
     if (!account.id || !account.username) throw new Error("Instagram Professional account not found.");
     const scopes = short.permissions ?? [];
-    await saveConnection({ instagram_user_id: account.id, username: account.username, profile: account, access_token: long.access_token, token_expires_at: long.expires_in ? new Date(Date.now() + long.expires_in * 1000).toISOString() : null, scopes });
+    await saveConnection({ instagram_user_id: account.user_id ?? account.id, username: account.username, profile: account, access_token: long.access_token, token_expires_at: long.expires_in ? new Date(Date.now() + long.expires_in * 1000).toISOString() : null, scopes });
     return back(request);
   } catch (caught) { return back(request, safeMetaMessage(caught)); }
 }

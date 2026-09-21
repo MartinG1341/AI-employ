@@ -28,7 +28,7 @@ function graphUrl(path: string, params: Record<string, string> = {}) {
 }
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 export async function getInstagramAccount(token: string) {
-  return metaFetch<{ id: string; username: string; name?: string; profile_picture_url?: string; account_type?: string }>(graphUrl("me", { fields: "id,username,name,profile_picture_url,account_type" }), { headers: auth(token) });
+  return metaFetch<{ id: string; user_id?: string; username: string; name?: string; profile_picture_url?: string; account_type?: string }>(graphUrl("me", { fields: "user_id,id,username,name,profile_picture_url,account_type" }), { headers: auth(token) });
 }
 export async function getConversations(token: string, accountId: string) {
   return metaFetch<{ data: { id: string; updated_time?: string; participants?: { data?: { id: string; username?: string }[] } }[]; paging?: { next?: string; cursors?: { after?: string } } }>(graphUrl(`${encodeURIComponent(accountId)}/conversations`, { fields: "id,updated_time,participants", limit: "25" }), { headers: auth(token) });

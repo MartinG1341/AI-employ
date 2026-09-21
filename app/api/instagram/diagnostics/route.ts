@@ -16,10 +16,12 @@ async function run(request: NextRequest, write: boolean) {
       const scopes = connection.scopes ?? [];
       return NextResponse.json({ source: "oauth_token_exchange", permissions_endpoint_supported: false, data: scopes.map(permission => ({ permission, status: "granted" })) });
     }
-    if (action === "conversations" && !write) { const data = await getConversations(token, connection.instagram_user_id); return NextResponse.json({ count: data.data.length, conversations: data.data }); }
+    const account = action === "conversations" || action === "messages" || action === "reply" ? await getInstagramAccount(token) : null;
+    const instagramAccountId = account?.user_id ?? connection.instagram_user_id;
+    if (action === "conversations" && !write) { const data = await getConversations(token, instagramAccountId); return NextResponse.json({ count: data.data.length, conversations: data.data }); }
     if (action === "messages" && !write) {
       const conversationId = request.nextUrl.searchParams.get("conversation_id") || "";
-      const conversations = await getConversations(token, connection.instagram_user_id);
+      const conversations = await getConversations(token, instagramAccountId);
       if (!conversations.data.some(c => c.id === conversationId)) return NextResponse.json({ error: "Conversation is not available to this account." }, { status: 404 });
       return NextResponse.json(await getConversationMessages(token, conversationId));
     }
@@ -29,11 +31,11 @@ async function run(request: NextRequest, write: boolean) {
       const message = body.message?.trim() ?? "";
       if (!message || message.length > 1000) return NextResponse.json({ error: "Reply must be 1–1000 characters." }, { status: 400 });
       if (!(connection.scopes ?? []).includes("instagram_business_manage_messages")) return NextResponse.json({ error: "Missing instagram_business_manage_messages permission." }, { status: 403 });
-      const conversations = await getConversations(token, connection.instagram_user_id);
+      const conversations = await getConversations(token, instagramAccountId);
       const conversation = conversations.data.find(c => c.id === body.conversation_id);
-      const recipient = conversation?.participants?.data?.find(p => p.id !== connection.instagram_user_id);
+      const recipient = conversation?.participants?.data?.find(p => p.id !== instagramAccountId);
       if (!recipient?.id) return NextResponse.json({ error: "No API-supported recipient found in this conversation." }, { status: 409 });
-      return NextResponse.json(await sendInstagramReply(token, connection.instagram_user_id, recipient.id, message));
+      return NextResponse.json(await sendInstagramReply(token, instagramAccountId, recipient.id, message));
     }
     return NextResponse.json({ error: "Unsupported diagnostic action." }, { status: 400 });
   } catch (error) {
