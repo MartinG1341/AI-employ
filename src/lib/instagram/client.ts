@@ -1,4 +1,4 @@
-import { metaConfig } from "./oauth";
+import { instagramConfig } from "./oauth";
 
 type MetaError = { error?: { message?: string; code?: number } };
 const graph = "https://graph.instagram.com/v23.0";
@@ -13,12 +13,12 @@ async function metaFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function exchangeInstagramCode(code: string) {
-  const { appId, secret, redirect } = metaConfig();
+  const { appId, secret, redirect } = instagramConfig();
   const form = new URLSearchParams({ client_id: appId, client_secret: secret, grant_type: "authorization_code", redirect_uri: redirect, code });
   return metaFetch<{ access_token: string; user_id: number; permissions?: string[] }>("https://api.instagram.com/oauth/access_token", { method: "POST", body: form });
 }
 export async function extendInstagramToken(shortToken: string) {
-  const { secret } = metaConfig();
+  const { secret } = instagramConfig();
   const query = new URLSearchParams({ grant_type: "ig_exchange_token", client_secret: secret, access_token: shortToken });
   return metaFetch<{ access_token: string; expires_in: number }>(`https://graph.instagram.com/access_token?${query}`);
 }
