@@ -1,10 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-export const adminCookie = "sales_instagram_admin";
+export const adminCookie = "sales_copilot_session";
 export const stateCookie = "sales_instagram_oauth_state";
 function password() { const value = process.env.SALES_COPILOT_ADMIN_PASSWORD; if (!value) throw new Error("Set SALES_COPILOT_ADMIN_PASSWORD to protect Instagram controls."); return value; }
-function digest() { return createHmac("sha256", password()).update("sales-copilot-instagram-admin-v1").digest("hex"); }
+function digest() { return createHmac("sha256", password()).update("sales-copilot-session-v2").digest("hex"); }
 export function validPassword(value: string) { const a = Buffer.from(value); const b = Buffer.from(password()); return a.length === b.length && timingSafeEqual(a, b); }
 export function sessionValue() { return digest(); }
 export function isAdmin(request: NextRequest) { const value = request.cookies.get(adminCookie)?.value ?? ""; const expected = Buffer.from(digest()); const actual = Buffer.from(value); return actual.length === expected.length && timingSafeEqual(actual, expected); }
