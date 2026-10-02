@@ -124,3 +124,7 @@ The portable build runs Vinext directly without a host `timeout` command. The ma
 
 - [vinext Documentation](https://github.com/cloudflare/vinext)
 - [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+
+## Local Sales Copilot setup
+
+Use Node 22.13+, copy `.env.example` to `.env.local`, add only your local/server secrets there, run `npm install`, then `npm run dev`. Never expose the service-role key, Instagram app secret, access tokens, webhook verify token, or admin password to client code. See [`docs/instagram-setup.md`](docs/instagram-setup.md) for the non-destructive migration order and Meta setup.

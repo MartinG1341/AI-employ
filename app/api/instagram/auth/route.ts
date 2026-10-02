@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json() as { password?: string };
     if (!validPassword(body.password ?? "")) return NextResponse.json({ error: "Incorrect admin password." }, { status: 401 });
     const response = NextResponse.json({ authenticated: true });
-    response.cookies.set(adminCookie, sessionValue(), { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/instagram", maxAge: 60 * 60 * 12 });
+    response.cookies.set(adminCookie, sessionValue(), { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 60 * 60 * 12 });
     return response;
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Authentication failed." }, { status: 400 }); }
 }

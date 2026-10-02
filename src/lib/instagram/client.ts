@@ -27,6 +27,10 @@ export async function extendInstagramToken(shortToken: string) {
   const query = new URLSearchParams({ grant_type: "ig_exchange_token", client_secret: secret, access_token: shortToken });
   return metaFetch<{ access_token: string; expires_in: number }>(`https://graph.instagram.com/access_token?${query}`);
 }
+export async function refreshInstagramToken(token: string) {
+  const query = new URLSearchParams({ grant_type: "ig_refresh_token", access_token: token });
+  return metaFetch<{ access_token: string; expires_in: number }>(`https://graph.instagram.com/refresh_access_token?${query}`);
+}
 function graphUrl(path: string, params: Record<string, string> = {}) {
   const query = new URLSearchParams(params);
   return `${graph}/${path}?${query}`;
@@ -36,7 +40,7 @@ export async function getInstagramAccount(token: string) {
   return metaFetch<{ id: string; user_id?: string; username: string; name?: string; profile_picture_url?: string; account_type?: string }>(graphUrl("me", { fields: "user_id,id,username,name,profile_picture_url,account_type" }), { headers: auth(token) });
 }
 
-type InstagramConversation = {
+export type InstagramConversation = {
   id: string;
   updated_time?: string;
   participants?: { data?: { id: string; username?: string }[] };
