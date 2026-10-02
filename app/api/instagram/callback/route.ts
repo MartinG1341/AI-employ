@@ -1,8 +1,8 @@
-import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin, safeMetaMessage, stateCookie } from "@/src/lib/instagram/admin";
 import { exchangeInstagramCode, extendInstagramToken, getInstagramAccount } from "@/src/lib/instagram/client";
 import { saveConnection } from "@/src/lib/instagram/repository";
+import { validOAuthState } from "@/src/lib/instagram/security";
 function back(request: NextRequest, error?: string) {
   const url = new URL("/", request.url);
   url.searchParams.set("section", "instagram");
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   if (!isAdmin(request)) return back(request, "Unlock Instagram settings and reconnect.");
   const expected = request.cookies.get(stateCookie)?.value ?? "";
   const actual = request.nextUrl.searchParams.get("state") ?? "";
-  if (!expected || expected.length !== actual.length || !timingSafeEqual(Buffer.from(expected), Buffer.from(actual))) return back(request, "Invalid OAuth state. Please reconnect.");
+  if (!validOAuthState(expected, actual)) return back(request, "Invalid OAuth state. Please reconnect.");
   const error = request.nextUrl.searchParams.get("error");
   if (error) return back(request, "Instagram authorization was cancelled or denied.");
   const code = request.nextUrl.searchParams.get("code");
